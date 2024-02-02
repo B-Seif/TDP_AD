@@ -6,6 +6,7 @@ import json
 from scipy import sparse
 import sys,math,time
 from numpy import linalg as LA
+from multiprocessing import Pool
 
 @dataclass
 class CustomParameters:
@@ -15,11 +16,8 @@ class CustomParameters:
     lamda : float        = 0.1
     s: int               = 20
     maxIt: int           = 10
-    h: float             = 0.5
+    h: float             = 0.75
     w : float            = 1
-
-
-
 class AlgorithmArgs(argparse.Namespace):
     # from TimeEval 1.2.10  
     @staticmethod
@@ -34,14 +32,14 @@ class AlgorithmArgs(argparse.Namespace):
 def load_data(config: AlgorithmArgs) -> np.ndarray:
     df = pd.read_csv(config.dataInput)
     return df.iloc[:, 1:-1].values
-# temporal dependency model S(i,j)
+
+# temporal dependency model S(i,j) eq(3)
 def S(lamda,w,obs_i,obs_j):
     diff   = np.abs(obs_i-obs_j)
     period = np.power(np.cos(w * diff),2)
     decay  = np.power(np.e, (- lamda * diff))
     return period * decay
-
-# construct Z by eign decomp K
+# construct Z by eign decomp K 
 def getZ(Wi,h,lamda,w):
     n_obs = Wi.shape[0]
     K=np.fromfunction(lambda i, j: S(lamda,w,i,j), (n_obs, n_obs))
@@ -68,8 +66,8 @@ def detector(Wi,Z,Ri,Pi,D_r,D_p,alpha,beta,maxIt):
     start_time=time.time()
     while t < maxIt:
         # update Pi and Ri
-        Pi = LA.pinv((Wi.T@Wi)+alpha * D_p)  @ (Wi.T @(Ri.T+Z))
-        Ri = (Wi@Pi - Z).T @ (LA.pinv( Ir+beta*D_r )).T
+        Pi = LA.pinv((Wi.T@Wi)+alpha * D_p)  @ (Wi.T @(Ri.T+Z)) # eq 9.
+        Ri = (Wi@Pi - Z).T @ (LA.pinv( Ir+beta*D_r )).T # eq 12.
         # update D_p and D_r
         D_p =  sparse.eye(p)* 0.5 * np.apply_along_axis(np.linalg.norm,1,Pi)
         D_r = sparse.eye(n)* 0.5 * np.apply_along_axis(np.linalg.norm,1,Ri.T)
@@ -81,6 +79,12 @@ def detector(Wi,Z,Ri,Pi,D_r,D_p,alpha,beta,maxIt):
 
     tmp = time.time()-start_time
     return {'Pi':Pi,'Ri':Ri,'loss':loss,'time':tmp,'maxIt':maxIt,'alpha':alpha,'beta':beta,'D_r':D_r,'D_p':D_p}
+
+def detect_unit(tpl):
+    i, toto=tpl
+    window,Z,B,W,D_b,D_w,alpha,beta,maxIt=toto
+    results=detector(window,Z,B,W,D_b,D_w,alpha,beta,maxIt)
+    return i,results
 
 def execute(args: AlgorithmArgs):
     # get hyper-parameters
@@ -95,26 +99,36 @@ def execute(args: AlgorithmArgs):
     # get data
     T = load_data(args)
     print(T.shape)
+
     # create windows with stride=1 from T
     W_win = T[np.arange(s)[None, :] + np.arange(T.shape[0]-s+1)[:, None]]
+    print(W_win.shape)
+    
+    # initialization
     Pi=np.random.rand(T.shape[1],math.ceil(h * W_win[0].shape[1]))
     D_p = np.eye(T.shape[1])
     D_r = np.eye(s)
-    Ri = np.random.rand(math.ceil(h * W_win[0].shape[1]),s)
+    # 
+    reduced_dim  = math.ceil(h * W_win[0].shape[1]) if math.ceil(h * W_win[0].shape[1]) <= s else s
+
+    Ri = np.random.rand(reduced_dim,s)
+    Z = getZ(W_win[0],reduced_dim,lamda,w)
+
+    
     # anomaly scores sequences
-    Scores = np.zeros([T.shape[0]-s+1,s])
-    index = 0
-    Z = getZ(W_win[0],math.ceil(h * W_win[0].shape[1]),lamda,w)
-    for Wi in W_win :
-        if (index % 500):
-            print("window : ",index, " from ",T.shape[0]-s+1," windows")
-        results =  detector(Wi,Z,Ri,Pi,D_r,D_p,alpha=alpha,beta=beta,maxIt=10)
-        Scores[index,:] = np.apply_along_axis(np.linalg.norm,1,results['Ri'].T)
-        B = np.random.rand(math.ceil(h * W_win[0].shape[1]),s)
-        W=np.random.rand(T.shape[1],math.ceil(h * W_win[0].shape[1]))
-        D_p = np.eye(T.shape[1])
-        D_r = np.eye(s)
-        index =index+1
+    Scores = np.zeros(T.shape[0]-s+1)
+    
+   
+    print("shape Ri",Ri.shape)
+    print("shape Z",Z.shape)
+    with Pool() as p:
+        for i, results in p.imap_unordered(
+            detect_unit,enumerate(
+                (window,Z,Ri,Pi,D_r,D_p,alpha,beta,maxIt) for window in W_win)
+                ):
+           
+            Scores[i] = LA.norm(results['Ri'],'fro') 
+   
 
     Scores.tofile(args.dataOutput, sep="\n")
 
