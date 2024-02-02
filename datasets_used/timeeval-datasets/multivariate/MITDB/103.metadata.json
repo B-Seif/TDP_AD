@@ -1,0 +1,38 @@
+[
+  {
+    "anomaly_length": {
+      "max": 403,
+      "median": 383,
+      "min": 364
+    },
+    "contamination": 0.00118,
+    "dataset_id": [
+      "MITDB",
+      "103"
+    ],
+    "dimensions": 2,
+    "is_train": false,
+    "length": 650000,
+    "means": {
+      "MLII": -0.23143039230769222,
+      "V2": 0.04701551538461537
+    },
+    "num_anomalies": 2,
+    "periods": {
+      "MLII": 1,
+      "V2": 22
+    },
+    "stationarities": {
+      "MLII": "difference_stationary",
+      "V2": "difference_stationary"
+    },
+    "stddevs": {
+      "MLII": 0.32184054913034427,
+      "V2": 0.6871086224135569
+    },
+    "trends": {
+      "MLII": [],
+      "V2": []
+    }
+  }
+]
