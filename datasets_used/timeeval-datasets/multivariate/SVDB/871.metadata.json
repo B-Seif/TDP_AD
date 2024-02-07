@@ -1,0 +1,38 @@
+[
+  {
+    "anomaly_length": {
+      "max": 203,
+      "median": 154,
+      "min": 125
+    },
+    "contamination": 0.0153515625,
+    "dataset_id": [
+      "SVDB",
+      "871"
+    ],
+    "dimensions": 2,
+    "is_train": false,
+    "length": 230400,
+    "means": {
+      "ECG1": 0.012112673611111109,
+      "ECG2": 0.009141731770833331
+    },
+    "num_anomalies": 23,
+    "periods": {
+      "ECG1": 1,
+      "ECG2": 1
+    },
+    "stationarities": {
+      "ECG1": "stationary",
+      "ECG2": "difference_stationary"
+    },
+    "stddevs": {
+      "ECG1": 0.375928669584095,
+      "ECG2": 0.36424326985549127
+    },
+    "trends": {
+      "ECG1": [],
+      "ECG2": []
+    }
+  }
+]
